@@ -18,8 +18,10 @@ for optim_file,idx in zip(optim_files,indices):
     ax2 = fig.add_subplot(132)
     ax3 = fig.add_subplot(133)
 
-    ax1.imshow(optim_data.T)
-    ax2.imshow((optim_data-optim_data_0).T,cmap='coolwarm')
+    im1 = ax1.imshow(optim_data.T)
+    fig.colorbar(im1,ax=ax1)
+    im2 = ax2.imshow((optim_data-optim_data_0).T,cmap='coolwarm')
+    fig.colorbar(im2,ax=ax2)
     im3 = ax3.imshow(c_data.T,cmap='jet')
     fig.colorbar(im3,ax=ax3)
 

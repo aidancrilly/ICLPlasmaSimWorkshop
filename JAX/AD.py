@@ -1,6 +1,7 @@
 import diffrax
 from lax_solver import *
 from runner import *
+from utils import *
 
 class Stepper(diffrax.Euler):
     """
@@ -52,18 +53,25 @@ def value_and_grad_MSE(c,phi,u_0,T,args):
     dMSEdc = jax.value_and_grad(MSE,argnums=0)
     return dMSEdc(c,phi,u_0,T,args)
 
-def smoother(c):
-    window = jnp.ones((10,10))
-    return jax.scipy.signal.convolve(c,window/jnp.sum(window),mode='same')
+def speed_func(coeffs,args):
+    Nx,Ny = args['Nx'],args['Ny']
+    c_ones = jnp.ones((Nx,Ny))
+    xx,yy = args['xx'],args['yy']
+    x_norm = xx/jnp.amax(xx)
+    y_norm = yy/jnp.amax(yy)
+    x_l = legendre_recurrence(x_norm,coeffs.shape[0])[1:,:,:]
+    y_l = legendre_recurrence(y_norm,coeffs.shape[1])[1:,:,:]
+    delta_c = jnp.einsum('ij,ikl,jkl->kl',coeffs,x_l,y_l)
+    return c_ones+delta_c
 
-def MSE_w_regulariser(c,phi,u_0,T,args):
-    c_smoothed = smoother(c)
+def MSE_w_regulariser(c_coeffs,phi,u_0,T,args):
+    c_smoothed = speed_func(c_coeffs,args)
     psi = solve_over_T_with_c(c_smoothed,u_0,T,args)
     return jnp.sum((psi-phi)**2)
     
-def value_and_grad_MSE_w_regulariser(c,phi,u_0,T,args):
+def value_and_grad_MSE_w_regulariser(c_coeffs,phi,u_0,T,args):
     dMSEdc = jax.value_and_grad(MSE_w_regulariser,argnums=0)
-    return dMSEdc(c,phi,u_0,T,args)
+    return dMSEdc(c_coeffs,phi,u_0,T,args)
 
 if __name__ == "__main__":
 
@@ -83,22 +91,28 @@ if __name__ == "__main__":
 
     T = 2.0
     xx,yy = jnp.meshgrid(x,y,indexing='ij')
-    phi = 0.5*(jnp.exp(-0.5*(xx**2+(yy-1.0)**2)/sig**2)+jnp.exp(-0.5*(xx**2+(yy+1.0)**2)/sig**2))
+    sig_phi = 20*delta
+    phi = 0.25*(jnp.exp(-0.5*(xx**2+(yy-1.0)**2)/sig_phi**2)+jnp.exp(-0.5*(xx**2+(yy+1.0)**2)/sig_phi**2))
+
+    mag = 0.01
+    coeffs = mag*(np.random.rand(4,6)-0.5)
+    args['xx'] = xx
+    args['yy'] = yy
 
     np.savetxt('./JAX/output/ADphi.txt',phi)
 
     # Simple gradient descent algorithm
-    n_iter = 50
-    learning_rate = 1e-6
+    n_iter = 500
+    learning_rate = 1e-5
     for iter in range(n_iter):
-        loss,dLdc = value_and_grad_MSE_w_regulariser(c,phi,u_0,T,args)
+        loss,dLdc = value_and_grad_MSE_w_regulariser(coeffs,phi,u_0,T,args)
         print(iter,loss)
-        c = c-learning_rate*dLdc
+        coeffs = coeffs-learning_rate*dLdc
 
-        c_out = smoother(c)
+        c_out = speed_func(coeffs,args)
         np.savetxt('./JAX/output/ADc.txt',c_out)
 
-    dt = dtmult*delta/c.max()
+    dt = dtmult*delta/c_out.max()
     Nt = int(np.ceil(T/dt))
     args = {'delta' : delta, 'dt' : dt, 'c' : c_out, 'Nx' : Nx, 'Ny' : Ny}
 

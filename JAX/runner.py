@@ -31,4 +31,4 @@ if __name__ == "__main__":
 
     args = {'delta' : delta, 'dt' : dtmult*delta/c.max(), 'c' : c, 'Nx' : Nx, 'Ny' : Ny}
 
-    for_loop_runner(u_0,c)
+    for_loop_runner(u_0,args)
