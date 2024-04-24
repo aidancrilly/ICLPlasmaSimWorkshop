@@ -1,15 +1,28 @@
 import jax
 import jax.numpy as jnp
 
-def Lax_Update(f,jx,jy):
-    f_1 = 0.25 * (f[:-2,1:-1] + f[2:,1:-1] + f[1:-1,:-2] + f[1:-1,2:])
-    f_1 -= 0.5 * (jx[2:,:] - jx[:-2,:] + jy[:,2:] - jy[:,:-2])
-    return f_1
+def c_uniform(xx,yy):
+    return jnp.ones_like(xx)
+
+def init_gaussian(x,y,sig,cfunc):
+    xx,yy = jnp.meshgrid(x,y,indexing='ij')
+    dist = jnp.sqrt(xx**2+yy**2)
+    c = cfunc(xx,yy)
+    r = -c*xx*jnp.exp(-0.5*dist**2/sig**2)/sig**2
+    l = -c*yy*jnp.exp(-0.5*dist**2/sig**2)/sig**2
+    s = jnp.zeros_like(xx)
+    psi = jnp.exp(-0.5*dist**2/sig**2)
+    return (r,l,s,psi),c
 
 def get_ghost(f):
     f_x     = jnp.concatenate((f[0:1,:],f,f[-1:,:]),axis=0)
     f_ghost = jnp.concatenate((f_x[:,0:1],f_x,f_x[:,-1:]),axis=1)
     return f_ghost
+
+def Lax_Update(f,jx,jy):
+    f_1 = 0.25 * (f[:-2,1:-1] + f[2:,1:-1] + f[1:-1,:-2] + f[1:-1,2:])
+    f_1 -= 0.5 * (jx[2:,:] - jx[:-2,:] + jy[:,2:] - jy[:,:-2])
+    return f_1
 
 def generate_Lax_Step(args):
     dt = args['dt']
